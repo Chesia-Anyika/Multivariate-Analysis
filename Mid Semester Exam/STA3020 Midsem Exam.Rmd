@@ -1,0 +1,984 @@
+---
+title: "STA3020 - Midsem Exam"
+author: "Chesia Anyika"
+date: "2024-02-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Name: Chesia Anyika
+
+ID: 665567
+
+# Libraries
+
+```{r}
+#general data manipulation
+library(tidyverse)
+
+#compute the effectsize of MANOVA
+library(effectsize)
+
+#multiple visualisations in one grid
+library(gridExtra)
+
+#dummy variables, splitting data, accuracy
+library(caret)
+
+# library for visualisation of PCA outputs
+library(factoextra)
+
+# library for running quadratic analysis
+library(MASS)
+```
+
+# Objective
+
+Perform a comprehensive multivariate analysis on the \`mtcars\` data-set using MANOVA, PCA, and Discriminant Analysis techniques in R. Interpret the results and provide insights into the underlying patterns in the data. Data-set: Use the \`mtcars\` data-set whose variables include both numerical and categorical data. The dataset is one of the inbuilt datasets in R.
+
+## 1. Exploratory Data Analysis
+
+First I loaded the required data-set into r, and explored its characteristics such as variable types.
+
+```{r}
+#load the data
+data("mtcars")
+
+#get summary of variable characteristics
+summary(mtcars)
+```
+
+```{r}
+unique(mtcars$cyl)
+unique(mtcars$vs)
+unique(mtcars$am)
+unique(mtcars$gear)
+unique(mtcars$carb)
+```
+
+The summary shows that all the variables are numeric. The `vs` and `am` variables are binary, and have only `1` and `0` variables.
+
+I then got a description of all the variable in the data-set using the `?mtcars` query.
+
+```{r}
+#get information about the data-set
+?mtcars
+```
+
+> **Description of the data**
+>
+> The data was extracted from the 1974 *Motor Trend* US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973--74 models)
+>
+> **Variables**
+>
+> A data frame with 32 observations on 11 **numeric** variables.
+>
+> -   `mpg` - Miles/(US) gallon
+>
+> -   `cyl` - Number of cylinders - (6, 4 & 8) - **can be considered as categorical**
+>
+> -   `disp` - Displacement (cu.in.)
+>
+> -   `hp` - Gross horsepower
+>
+> -   `drat` - Rear axle ratio
+>
+> -   `wt` - Weight (1000 lbs)
+>
+> -   `qsec` - 1/4 mile time
+>
+> -   `vs` - Engine (0 = V-shaped, 1 = straight) - **can be considered as categorical**
+>
+> -   `am` - Transmission (0 = automatic, 1 = manual) - **can be considered as categorical**
+>
+> -   `gear` - Number of forward gears (4, 3, 5) - **can be considered as categorical**
+>
+> -   `carb` - Number of carburetors (1,2,3,4,6,8) - **can be considered as categorical**
+
+From the exploratory analysis I identified **6 numeric variables** and **5 possible categorical variables**, which are `cyl` , `vs` , `am`, `gear` and `carb` .
+
+I converted these variables into categorical, specifically factor variables, and left the remaining variables as numeric.
+
+```{r}
+# Convert specific variables to factor (library(dplyr))
+mtcars.q1 <- mtcars %>%
+  dplyr::mutate(
+    cyl = factor(cyl), #convert 'cyl' to factor
+    vs = factor(vs),  #convert 'vs' to factor
+    am = factor(am),   #convert 'am' to factor
+    gear = factor(gear), #convert 'gear' to factor
+    carb = factor(carb), #convert 'carb' to factor
+  )
+
+#check for successful conversion
+sapply(mtcars.q1, class)
+```
+
+The relevant variables have been converted to factor variables.
+
+# Question 1
+
+Tasks:
+
+Multivariate Analysis of Variance (MANOVA) (10 points):
+
+− Formulate a hypothesis related to the categorical variables in the data-set.
+
+− Perform MANOVA to test the hypothesis.
+
+− Interpret the results and assess the significance of the findings.
+
+− Provide a conclusion based on the MANOVA results
+
+## Execution
+
+### a. Formulation of Hypotheses
+
+Considering the `vs` variable, a binary categorical variable which represents the Engine shape as either:
+
+> -   V shaped - coded as 0
+>
+> -   Straight shaped - coded as 1
+
+I formulated the hypothesis that:
+
+> The engine type (`vs`) (V-shaped or straight) significantly influences the recorded numeric characteristics of the mtcars data-set, which are the fuel efficiency (`mpg`), displacement (`disp`), horsepower(`hp`), rear axle ratio(`drat`), Weight (`wt`) and 1/4 mile time (`qsec`).
+>
+> This is in alignment with the **Alternative Hypothesis** of a MANOVA test.
+
+The hypotheses for the MANOVA test are:
+
+> **Null Hypothesis** : There are no significant differences among the group means across all the dependent variables. This is represented as:
+>
+> $$
+> H_{0}: \mu_1 = \mu_2=...=\mu_k
+> $$
+>
+> **Alternative Hypothesis** : there is at least one significant difference among the group means across all the dependent variables. This is represented as:
+>
+> $$
+> H_{a}: \mu_1 \neq \mu_2 \neq...\neq \mu_k
+> $$
+
+### b. Performance of MANOVA
+
+First I subset my variables of interest into a new data-frame, using the `select()` function from the `dplyr` library.
+
+```{r}
+#subset data 
+df.q1 <- mtcars.q1 %>% 
+  dplyr::select(vs, mpg, disp, hp, drat, wt, qsec)
+
+#view head of data
+head(df.q1)
+```
+
+I then ran a MANOVA test with `vs` as my independent variable and `mpg` , `disp` , `hp` , `drat` , `wt` and `qsec` as my dependent variables. I grouped my dependent variables using the `cbind()` function, then ran the MANOVA test using the `manova()` function which is one of base R functions. I then got a summary of the test using the `summary()` function.
+
+```{r}
+#group the dependent variables
+dep_vars <- cbind(df.q1$mpg, df.q1$disp, df.q1$hp, df.q1$drat, df.q1$wt, df.q1$qsec)
+
+#run the manova test
+fit.q1 <- manova(dep_vars ~ vs, data = df.q1)
+
+#get a summary of the test
+summary(fit.q1)
+```
+
+### c. Interpretation of Results and Further Analysis
+
+The **Pillai's Trace Test Statistic** is **statistically significant**, with a **P_value** \< $0.05$, at $8.807e^{-7}$. Thus there is **little evidence to support the Null Hypothesis** that there are no significant differences among group means across all the dependent variables.
+
+This suggests that the Engine shape (`vs`) indeed **has a statistically significant effect on at least one of the numeric variables tested against**, namely the fuel efficiency (`mpg`), Displacement (`disp`), Horsepower (`hp`), Rear axle ratio (`drat`), Weight (`wt`) and 1/4 mile time (`qsec`) of cars.
+
+#### - Analysis of Effect Size
+
+I am using the concept of **Partial Eta-Squared** ( $\eta^2_p$ ) to analyse how great of an effect the `vs` variable has on the variance across the numeric measurements of car characteristics
+
+> **Brief Definition**: In the context of MANOVA, $\eta^2_p$ is an effect size measure that quantifies the proportion of total variance in the dependent variables that is attributable to the independent variable(s) being studied, while statistically controlling for other variables in the model. The proportion it ranges from 0 (no effect) and 1 (compete effect). It can be interprated as follows:
+>
+> $0.01$: Small effect size
+>
+> $0.06$: Medium effect size
+>
+> $0.14$\$ or higher: Large effect size
+>
+> **Formula**:
+>
+> $$
+> \eta^2_p = \frac{SS_{Effect}}{SS_{Total}}
+> $$
+>
+> Where:
+>
+> $SS_{Effect}$ is the sum of squares for the effect of interest (grouping/independent variable).
+>
+> $SS_{Total}$ is the total sum of squares, representing the overall variability in the multivariate response.
+
+I used the `eta_squared()` function from the `effectsize` library to compute this as follows:
+
+```{r}
+#analysis of effect size
+eta_squared(fit.q1)
+```
+
+The $\eta^2_{p}$ value is $0.76$. This suggests that $76\%$ of the total variability in the dependent variables is accounted by the `vs` factor. This is a statistically significant portion size,a nd suggest a large effect size.
+
+The confidence interval of $[0.58, 1.00]$ states the range of plausible values for the true population parameter of $\eta^2_{p}$ lies within that range of proportions.
+
+#### - Analysis per Dependent Variables
+
+I used a **summary anova table** to obtain a summary of the individual anova tables associated with the independent variable and each dependent variable. This is so I can determine **which dependent variables vary significantly across the sites**. I used the `summary.aov()` function to compute these as follows:
+
+```{r}
+#anova tables
+aov.fit <- summary.aov(fit.q1)
+aov.fit
+```
+
+> The Individual ANOVA tables all have **statistically significant Pillai's test statistics**, with their **P-values** \< $0.05$. Thus, every dependant variable in the MANOVA test exhibits variability due to Engine Shape (`vs`), in a statistically significant way.
+>
+> The responses are as follows:
+>
+> -   Fuel efficiency (`mpg`) - P_value = $3.416e^{-5}$
+> -   Displacement (`disp`) - P_value = $5.235e^{-6}$
+> -   Horsepower (`hp`) - P_value = $2.941e^{-6}$
+> -   Rear axle ratio (`drat`) - P_value = $0.01168$
+> -   Weight (`wt`) - P_value = $0.0009798$
+> -   1/4 mile time (`qsec`) - P_value = $1.03e^{-6}$
+
+In order to meaningfully compare the P-values obtained above, sample sizes of each dependent variable per level of the `vs` variable would need to be equal. This would mean the P-values are monotonically related to the F_values per anova table, and can be used to determine the extent to which each dependent variable is affected by the independent variable, Engine shape.
+
+I used the `group_by()` and `summarise()` functions from the `dplyr` library to get the counts of the observations split by the levels of the `vs` variable.
+
+```{r}
+# Check the count of observations per level of the "vs" variable
+obs.counts <- df.q1 %>%
+  dplyr::group_by(vs) %>%
+  dplyr::summarize(Count = n())
+
+obs.counts
+```
+
+The sample sizes across the levels of the `vs` variable are not the same, thus the P-values can not be meaningfully compared. However, given that the MANOVA test has confirmed the dependent variables vary across `vs` levels in a statistically significant way, we can meaningfully compare the dependent variables means across groups.
+
+I did this by plotting bar plots of the dependent variables, all grouped per Engine shape, as follows:
+
+```{r}
+#create a suitable dataframe for plotting
+df.plot <- df.q1 %>%
+  mutate(vs = ifelse(vs == 0, "V-shaped", "Straight"))
+
+# Create bar charts per variable
+p1 <- ggplot(df.plot, aes(x = vs, y = mpg, fill = vs)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "mpg by vs",
+       x = "vs (Engine Shape)",
+       y = "Mean Fuel Efficiency") +
+  theme(legend.position = "top")
+
+
+p2 <- ggplot(df.plot, aes(x = vs, y = disp, fill = vs)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "disp by vs",
+       x = "vs (Engine Shape)",
+       y = "Mean Displacement") +
+  theme(legend.position = "top")
+
+p3 <- ggplot(df.plot, aes(x = vs, y = hp, fill = vs)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "hp by vs",
+       x = "vs (Engine Shape)",
+       y = "Mean Horsepower") + 
+  theme(legend.position = "top")
+
+
+grid.arrange(p1, p2, p3, ncol=3, nrow = 1)
+```
+
+```{r}
+# Create bar charts per variable
+p4 <- ggplot(df.plot, aes(x = vs, y = drat, fill = vs)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "drat by vs",
+       x = "vs (Engine Shape)",
+       y = "Mean Rear Axle Ratio") +
+  theme(legend.position = "top")
+
+
+p5 <- ggplot(df.plot, aes(x = vs, y = wt, fill = vs)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "wt by vs",
+       x = "vs (Engine Shape)",
+       y = "Mean Weight") +
+  theme(legend.position = "top")
+
+p6 <- ggplot(df.plot, aes(x = vs, y = qsec, fill = vs)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "qsec by vs",
+       x = "vs (Engine Shape)",
+       y = "Mean 1/4 mile time") + 
+  theme(legend.position = "top")
+
+
+grid.arrange(p4, p5, p6, ncol=3, nrow = 1)
+```
+
+From the Bar-Plots, we learn that:
+
+> -   `mpg` : Car models with Straight Engine Shapes have **higher mean fuel efficiency** than those with V-Shaped engines.
+>
+> -   `disp` : Car models with Straight Engine Shapes have **lower mean displacement** than those with V-Shaped engines.
+>
+> -   `hp` : Car models with Straight Engine Shapes have **lower mean horsepower** than those with V-Shaped engines.
+>
+> -   `drat` : Car models with Straight Engine Shapes have **higher mean rear axle ratios** than those with V-Shaped engines.
+>
+> -   `wt` : Car models with Straight Engine Shapes have **lower mean weight** than those with V-Shaped engines.
+>
+> -   `qsec`: Car models with Straight Engine Shapes have **higher mean 1/4 mile times** than those with V-Shaped engines.
+
+### d. Conclusion
+
+> The Engine Shape (`vs`) has a statistically significant effect on measured characteristics of cars, namely the fuel efficiency (`mpg`), displacement (`disp`), horsepower (`hp`), rear axle ratio (`drat`), weight (`wt`) and 1/4 mile time (`qsec`). This is verified by the MANOVA test's Pillai test statistic being statistically significant.
+>
+> The size of this effect can be quantified as large, as computed using the Partial eta-squared formula ( $\eta^2_p$ ), which gives a value of $0.76$. Thus $76\%$ of the variability of the variables can be explained by the Engine shape variable.
+>
+> Per variable, the following conclusions can be made when comparing means:
+>
+> -   `mpg`, `drat`, `qsec` : Car models with Straight Engine Shapes have **higher mean fuel efficiency, higher mean rear axle ratios and higher mean 1/4 mile times** than those with V-Shaped engines.
+>
+>     In general, cars with higher mean fuel efficiency are smaller in size. Higher mean rear axle ratios are associated with faster acceleration speeds or heavy loaded cars, while higher quarter mile times are associated with slower cars.
+>
+> -   `disp`, `hp`, `wt` : Car models with Straight Engine Shapes have **lower mean displacement, lower mean horsepower and lower mean weight** than those with V-Shaped engines.
+>
+>     In general, smaller cars are associated with lower mean displacement, lower mean weight and lower mean horsepower. This is because they do not require as much engine for acceleration, due to their low weight, thus the lower horsepower and lower engine displacement. Lower performance engines are also associated with lower mean horsepower
+>
+> -   **In General**:
+>
+>     Our findings are in line with the fact that:\
+>     Straight engines, also known as inline engines, have all of their cylinders arranged in a single line. This type of engine is relatively simple and compact, making it ideal for smaller cars. Straight engines are also typically less expensive than V-shaped engines, thus are used in lower performance cars.
+>
+>     V-shaped engines, on the other hand, have their cylinders arranged in a V-shape. This type of engine is typically found in larger cars and trucks, as it provides more power and torque than a straight engine. V-shaped engines are also more expensive than straight engines.
+
+------------------------------------------------------------------------
+
+# Question 2
+
+Principal Component Analysis (PCA) (10 points):
+
+− Conduct PCA on the standardized variables.
+
+− Identify the principal components and their contribution to the total variance.
+
+− Visualize the results using a scree plot and/or biplot.
+
+− Discuss the insights gained from the PCA
+
+## Execution
+
+### Pre-processing
+
+I will be using the initial `mtcars.q1` data-frame created before, with the 6 numeric variables and 5 categorical variables for this question.
+
+```{r}
+summary(mtcars.q1)
+```
+
+#### Creation of Dummy Variables
+
+PCA is typically applied to numeric variables, as it is a technique that relies on mathematical operations such as covariance or correlation matrix computations, which are most meaningful for continuous numeric variables. One way to include categorical variables in PCA analysis is to convert such variables into dummy variables.
+
+> **Brief Definition**: A dummy variable, also known as an indicator variable, is a binary variable used to represent categories or levels of a categorical variable, taking the value 0 or 1 to indicate the absence or presence of a particular characteristic.
+
+In order to do this, I first subset my data into three dataframes, one with the numeric variables, another with the binary categoriacal variables and the other with the multilevel factor variables.
+
+```{r}
+#create dataframe of only numeric variables
+df.num <- mtcars.q1 %>% 
+  dplyr::select_if(is.numeric)
+
+#create dataframe of only binary variables
+df.bin <- mtcars.q1 %>%
+  dplyr::select(vs, am)
+
+#create dataframe of categorical variables
+df.cat <- mtcars.q1 %>% 
+  dplyr::select(cyl, gear, carb)
+
+#check for success
+sapply(df.num, class)
+sapply(df.bin, class)
+sapply(df.cat, class)
+```
+
+I then created dummy variables from the categorical variables using the `dummyVars()` function from the `caret` library.
+
+```{r}
+#use dummyVars function from caret
+dummy_vars <- dummyVars(~ ., data = df.cat)
+
+#create dummy variables
+dummy_data <- data.frame(predict(dummy_vars, newdata = df.cat))
+
+#check for success
+head(dummy_data)
+```
+
+I then combined the dummy variables, the numeric variables and the binary variables to form one data-set, which I will use for PCA.
+
+```{r}
+#convert df.bin to numeric
+df.bin <- sapply(df.bin, as.numeric)
+
+# Combine numeric and dummy variables
+df.PCA <- cbind(df.num, df.bin, dummy_data)
+
+#View head of data
+head(df.PCA)
+```
+
+The new data has 32 observations and 20 columns.
+
+### a. Conduct PCA on Standardised Data
+
+> **Standardisation**:
+>
+> When performing PCA, standardisation ensures the variables with different scales do not disproportionately influence the results of the PCA. It is usually performed by subtracting the mean from an observation then dividing the result by the standard deviation. This is repeated for all observations, as per the formula:
+>
+> $$
+> Z_{ij} = \frac{X_{ij} - \bar{x_{ij}}}{s_{j}}
+> $$
+>
+> Where:
+>
+> $Z_{ij}$ represents the standardised observation for variable j in sample unit i
+>
+> $X_{ij}$ represents the data for variable j in sample unit i
+>
+> $\bar{x_{j}}$ represents the mean
+>
+> $s_{j}$ represents the standard deviation for variable j
+
+I used the `prcomp()` function in `base` R to apply PCA on my data. The function has an **inherent scaling and centering parameter**, which I will use to standardise the data.
+
+```{r}
+#apply PCA
+pca <- prcomp(df.PCA, center = TRUE, scale. = TRUE)
+
+#Summary of model
+summary(pca)
+```
+
+The above analysis shows the 22 principal components computed, as well as their Standard deviation, Proportion of Variance and Cumulative Proportion. Looking at the **Proportion of Variance** row in the above analysis, we see that the first principal component, `PC1` , represents a percentage of $41.48\%$ of the variance, and the subsequent components represent less and less percentages of the Proportion of Variance.
+
+As the cumulative Proportion of Variance contributed reduces with each subsequent Principal Component, we do not need to consider PCs that contribute very little to the Cumulative Variance. We can use the above analysis coupled with a Scree Plot to determine the appropriate cut off point for significant Principal Components.
+
+### b. Scree Plot
+
+I created a scree plot using the `fviz_eig()` function from the `factoextra` library.
+
+```{r}
+#create scree plot - barplot with line
+fviz_eig(pca, 
+         addlabels = TRUE,
+         main = "Scree Plot for PCA of mtcars Data", 
+         xlab = "Principal Components",              
+         ylab = "Percentage of Explained Variance",                              
+         barfill = "blue",
+         linecolor = 'black'
+)
+```
+
+There are 3 visible from `PC1` to `PC4` , then the scree line becomes relatively straight with a decreasing trend for the remaining PCs. Considering that the first 5 components explain $82.46\%$ of the **Cumulative Variance** from the PCA summary, this is an acceptable percentage of variance to consider as significant. We can consider the remaining PCs from `PC6` to `PC22` as negligible.
+
+### c. Identify the principal components and their contribution to the total variance.
+
+#### 1. PC loadings
+
+I obtained the PC loadings automatically calculated using the `prcomp()` function, in order to examine the correlation between the original variables and the principal components. I specifically loaded only the first five principal components which explain a high amount of the variance in the data.
+
+```{r}
+#obtain the PCA loadings
+loadings <- as.data.frame(pca$rotation[, 1:5])
+loadings
+```
+
+Taking a significance level of $\rho \geq 0.3$, I filtered for observations that satisfied this condition for each Principal Component.
+
+```{r}
+#obtain significant variables for PC1
+loadings.sig1 <- loadings %>%
+  dplyr::filter(abs(PC1) >= 0.3)
+
+loadings.sig1
+```
+
+```{r}
+#obtain significant variables for PC2
+loadings.sig2 <- loadings %>%
+  dplyr::filter(abs(PC2) >= 0.3)
+
+loadings.sig2
+```
+
+```{r}
+#obtain significant variables for PC3
+loadings.sig3 <- loadings %>%
+  dplyr::filter(abs(PC3) >= 0.3)
+
+loadings.sig3
+```
+
+```{r}
+#obtain significant variables for PC4
+loadings.sig4 <- loadings %>%
+  dplyr::filter(abs(PC4) >= 0.3)
+
+loadings.sig4
+```
+
+```{r}
+#obtain significant variables for PC5
+loadings.sig5 <- loadings %>%
+  dplyr::filter(abs(PC5) >= 0.3)
+
+loadings.sig5
+```
+
+From the filtered loadings data-sets, we can deduce which variables contribute the most to each PC, as follows:
+
+> -   `PC1`
+>
+>     -   `disp` - Loading of 0.328, which is the most positive loading for `PC1`.
+>
+>     -   `cyl.8` - Loading of 0.313 (positive response: having 8 cylinders)
+>
+>     -   `wt` - Loading of 3.003
+>
+>     -   `mpg` - Loading of -0.317, which is the most negative loading to `PC1`.
+>
+>     **Thus, higher displacement, having 8 cylinders and higher weight contribute greatly to `PC1`, as evidenced by the positive loadings above the significance level.**
+>
+>     **Furthermore, lower fuel efficiency contributes greatly to `PC1`, as evidenced by the high negative loading above the significance level**.
+>
+> -   `PC2`
+>
+>     -   `gear.5` - Loading of 0.4802, which is the highest positive loading for `PC2`. (positive response: having 5 gears)
+>
+>     -   `am` -Loading of 0.3768 (positive response: manual transmission)
+>
+>     -   `qsec` - Loading of -0.4147, which is the highest negative loading for `PC2`.
+>
+>     **Thus having 5 gears and having a manual transmission type contribute greatly to `PC2`, as evidenced by the positive loadings above the significance level.**
+>
+>     **Furthermore, having a lower 1/4 mile time contributes greatly to `PC2`, as evidenced by the negative loading above the significance level.**
+>
+> -   `PC3`
+>
+>     -   `cyl.6` - Loading of 0.5599, which is the highest positive loading for `PC3`. (Positive response: having 6 cylinders)
+>
+>     -   `carb.4` - Loading of 0.4544. (positive response: having 4 carburetors)
+>
+>     -   `carb.2` - Loading of -0.4390, which is the highest negative loading for `PC3`. (Positive response: having 2 carburetors)
+>
+>     **Thus having 6 cylinders and having 4 carburetors contribute greatly to PC3, as evidenced by the positive PC Loadings above the significance level.**
+>
+>     **Furthermore, not having 2 carburetors contributes greatly to `PC3`, as evidenced by the negative PC loadings above the significance level.**
+>
+> -   `PC4`
+>
+>     -   `carb.6` - Loading of 0.4387, which is the highest positive loading for `PC4`. (positive response: having 6 carburetors)
+>
+>     -   `carb.1` - Loading of 0.3771. (positive response: having 1 carburetor)
+>
+>     -   `gear.4` - Loading of -0.3131. (positive response: having 4 forward gears)
+>
+>     -   `carb.4` - Loading of -0.4269, which is the highest negative loading for `PC4` (positive response: having 4 carburetors)
+>
+>     **Thus having 6 carburetors and having 1 carburetor contribute greatly to `PC4` as evidenced by the positive loadings above the significance level.**
+>
+>     **Furthermore, not having 4 forward gears and not having 4 carburetors contributes greatly to `PC4` as evidenced by the negative loadings above the significance level**
+>
+> -   `PC5`
+>
+>     -   `carb.2` - Loading of 0.4745, which is the highest positive loading for `PC5`. (positive reponse: having 2 carburetors)
+>
+>     -   `carb.6` - Loading of 0.4237. (positive response: having 6 carburetors)
+>
+>     -   `carb.1` - Loading of -0.4193. (positive response: having 1 carburetor)
+>
+>     -   `carb.8` - Loading of -0.4972, which is the highest negative loading for `PC5`. (positive response: having 8 carburetors)
+>
+>     **Thus, having 2 carburetors and having 6 carburetors contribute greatly to `PC5`, as evidenced by the positive loadings above the significance level**
+>
+>     **Furthermore, not having 1 carburetor and not having 8 carburetors contribute greatly to `PC5`, as evidenced by the negative loadings above the significance level.**
+
+#### 2. Bi-plot
+
+I visualised the contribution of each variable to the first two principle components using a biplot, to further analyse the contribution of each variable to the principle components.
+
+I did this using the `fviz_pca_var()` function from the `factoextra` library.
+
+```{r}
+# Graph of the variables
+fviz_pca_var(pca, col.var = "contrib", gradient.cols = c("green","yellow","orange","red"))
+```
+
+**Intepretation**
+
+> -   **Effect on `PC1`**
+>
+>     The `disp` , `wt` and `cyl.8` variables have the highest positive contributions to `PC1`.
+>
+>     The `mpg` variable has the highest negative contribution to `PC1`.
+>
+> -   **Effect on `PC2`**
+>
+>     The `am` and `gear.5` variables have the highest positive contributions to `PC2`.
+>
+>     The `qsec` variable has the highest negative contributions to `PC2`.
+
+These results are in line with the conclusions made when analysing the PC Loadings for `PC1` and `PC2`.
+
+### d. Discuss the insights gained from the PCA
+
+From the information gained from the PCA loadings as well as the biplot, the following Insights can be made per Principal Component:
+
+> #### PC1: Larger, Heavier, Less Fuel Efficient Cars
+>
+> -   **Higher Displacement (`disp`):** Cars with larger engine displacements contribute positively to `PC1`. Cars with higher displacements often have larger, more powerful engines which are associated with larger, heavier cars. This is because larger, heavier cars require more power to accelerate and maintain higher speeds. Larger engines are also less fuel efficient.
+>
+> -   **Having 8 Cylinders (`cyl.8`):** Cars with 8 cylinders contribute positively to `PC1`. Cars with more cylinders tend to have larger engines displacements and higher power, aligning with the overall theme of `PC1`.
+>
+> -   **Higher Weight (`wt`):** Heavier cars contribute positively to `PC1`. Heavier cars often have larger engines due to the requirement of more power for acceleration.
+>
+> -   **Lower Fuel Efficiency (`mpg`):** Cars with higher miles per gallon (higher fuel efficiency) contribute negatively to `PC1`. This aligns with the expectation that cars with larger engines and higher weight may have lower fuel efficiency.
+>
+>     **Interpretation**: `PC1` seems to capture the general size, power, and fuel efficiency characteristics of cars, with positive contributions from larger engines, more cylinders, higher weight, and negative contributions from lower fuel efficiency. This is generally associated with larger cars.
+>
+> #### PC2: Older Technology, Lower Performance Cars.
+>
+> -   **Having 5 Gears (gear.5):** Cars with 5 gears contribute positively to PC2. The average number of gears for modern automatic cars is 6 to 8 speeds, thus 5 gears is less than usual, and associated with older cars.
+>
+> -   **Manual Transmission (am):** Cars with manual transmission contribute positively to PC2. Manual transmissions allow for more direct control over gear changes, enabling skilled drivers to optimize acceleration and achieve faster 1/4 mile times.
+>
+> -   **Higher 1/4 Mile Time (qsec):** Cars with higher 1/4 mile times contribute negatively to PC2. A lower 1/4 mile time is generally more associated with older cars, with worse acceeration and performance.
+>
+> **Interpretation:** PC2 appears to capture number of forward gears, transmission type, and 1/4 mile time. Particularly it captures having 5 forward gears, which is considered less than average for modern cars ; having a manual transmission type and having slower 1/4 mile times. These characteristics are generally associated with Older, Lower Performance cars.
+>
+> #### PC3: Higher Performance Engines.
+>
+> -   **Having 6 Cylinders (cyl.6):** Cars with 6 cylinders contribute positively to PC3. This is on the higher side of the cylinders variable, and engines with higher numbers of cylinders are more associated with higher potential power and higher performance engines.
+>
+> -   **Having 4 Carburetors (carb.4):** Cars with 4 carburetors contribute positively to PC3. More carburetors are often associated with higher-performance engines. Thus the component seems to be associated with higher performance engines.
+>
+> -   **Not Having 2 Carburetors (carb.2):** Cars without 2 carburetors contribute negatively to PC3. Less Carburetors are associated with lower performance engines, thus due to the negative relationship with PC3, the component seems to be associated with higher performance engines.
+>
+> **Interpretation:** PC3 may be capturing features associated with engine characteristics, with a positive association with 6 cylinders and 4 carburetors.
+>
+> #### PC4: Carburetor and Gear Characteristics
+>
+> -   **Having 6 Carburetors (carb.6):** Cars with 6 carburetors contribute positively to PC4. This is on the higher end, and more Carburetors are generally associated with higher performance engines.
+>
+> -   **Having 1 Carburetor (carb.1):** Cars with 1 carburetor contribute positively to PC4. This is on the lower end, and less carburetors are generally associated with lower performance vehicles.
+>
+> -   **Not Having 4 Forward Gears (gear.4):** Cars without 4 forward gears contribute negatively to PC4. This is on the lower side, and less forward gears are associated with older, lower performance cars.
+>
+> -   **Not Having 4 Carburetors (carb.4):** Cars without 4 carburetors contribute negatively to PC4. This is on the lower end, and less carburetors are associated with lower performance vehicles.
+>
+> **Interpretation:** PC4 seems to capture features related to the number of carburetors and gears, potentially indicating specific performance characteristics. Overall, the characteristics seem to align with higher performance vehicles, but there is a contradictory characteristic of having 1 carburetor that contributes positively to the loading.
+>
+> #### PC5: Moderate Performance Engines
+>
+> -   **Having 2 Carburetors (carb.2):** Cars with 2 carburetors contribute positively to PC5. This is on the lower side, and less carburetors are associated with lower performance engines. It is not an extreme value, thus such cars ikely have moderate engine performance.
+>
+> -   **Having 6 Carburetors (carb.6):** Cars with 6 carburetors contribute positively to PC5. This is on the higher side, and more carburetors are associated with higher performance engines. This is not an extreme value, thus such cars likely have moderate engine performance.
+>
+> -   **Not Having 1 Carburetor (carb.1):** Cars without 1 carburetor contribute negatively to PC5. This is on the lower end, and less carburetors are associated with lower performance vehicles. This is the minimum value possible for the variable. due to the negative association, this component is likely not associated with very low performance vehicles.
+>
+> -   **Not Having 8 Carburetors (carb.8):** Cars without 8 carburetors contribute negatively to PC5. This is on the higher side, and higher number of carburetors are associated with higher performance vehicles. This is the maximum number of carburetors possible for this variable. due to the negative association with this variable, the component is likely not associated with very high performance vehicles
+>
+> **Interpretation:** PC5 appears to be associated with the number of carburetors, with positive associations for 2 and 6 carburetors and negative associations for not having 1 and 8 carburetors. This suggests an association with moderate performance engines.
+>
+> ### Overall Insights:
+>
+> -   PC1 seems related to Larger, Heavier less Fuel Efficient Cars
+>
+> -   PC2 is associated with Older, Lower Performance Cars.
+>
+> -   PC3 captures features related to Higher Performance Engines.
+>
+> -   PC4 is associated with Carburetor and Gear characteristics
+>
+> -   PC5 also seem to capture characteristics related to Moderate Performance Engines.
+
+------------------------------------------------------------------------
+
+# Question 3
+
+Discriminant Analysis (10 points):
+
+− Choose a categorical variable as the response variable.
+
+− Split the data-set into training and testing sets.
+
+− Perform Discriminant Analysis on the training set.
+
+− Evaluate the model's performance on the testing set using appropriate metrics.
+
+− Discuss the classification accuracy and the practical implications of the discriminant analysis
+
+## Execution
+
+### a. Choose a Categorical Variable as the Response Variable
+
+I chose the Engine Shape (`vs`) variable as my response variable. This is because
+
+> -   It is a binary categorical variable, thus suitable as a response variable for discriminant analysis.
+>
+> -   I used it as my response variable for the MANOVA test in question one, which is an appropriate test of discriminative power of the predictor variables. I found that the **Pillai's Test Statistic was statistically significant**. In the context of feature selection, This implies that of the dependent variables used in the test, there are variable that contribute statistically significantly to variation across levels of the `vs` variable.
+>
+>     On running the individual anova summary tables, I concluded that these Predictor Variables were:
+>
+>     -   Fuel efficiency (`mpg`) - P_value = $3.416e^{-5}$
+>
+>     -   Displacement (`disp`) - P_value = $5.235e^{-6}$
+>
+>     -   Horsepower (`hp`) - P_value = $2.941e^{-6}$
+>
+>     -   Rear axle ratio (`drat`) - P_value = $0.01168$
+>
+>     -   Weight (`wt`) - P_value = $0.0009798$
+>
+>     -   1/4 mile time (`qsec`) - P_value = $1.03e^{-6}$
+
+I then assessed the characteristics of the `vs` variable to gain a better understanding of it.
+
+First I examine the levels present in the variable, using the `df.q1` data-frame created in question 1, in which I converted all relevant the `vs` variable into a factor variable and subset all the relevant numeric predictor variables into one data-frame.
+
+```{r}
+levels(df.q1$vs)
+```
+
+The Responses correspond to
+
+> 0 : V-shaped engines
+>
+> 1 : Straight shaped engines
+
+I then plotted a bar-plot of the variable to visualise its distribution, with the `vs` levels on the x-axis, and their Percentage occurrence on the y axis.
+
+```{r}
+#assign total observations to a variable
+totalr <- nrow(df.q1)
+
+#create a dataframe of the counts per factor for Credit_risk
+counts <- as.data.frame(table(df.q1$vs))
+counts
+
+#Calculate Percentages
+pcounts <- data.frame(Counts = counts, Percentage = ((counts$Freq)*100)/totalr)
+pcounts
+
+#Create visualisation
+ggplot(pcounts, aes(x = Counts.Var1, y = Percentage, fill= Counts.Var1)) + 
+  geom_bar(stat = 'identity' ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme(legend.position="none") +
+  xlab('Engine Shape Types') +
+  scale_x_discrete(labels = c("0" = "V-Shaped (56.25%)", "1" = "Straight Shaped (43.75%)"))+
+  ggtitle('Distribution of Engine Shape Variable')
+```
+
+**Interpretation**
+
+> -   `vs` is a binary variable split into two levels, namely `V-shaped` and `Straight-shaped` Engine Shapes.
+>
+> -   $56.25%$ of recorded cars have V-Shaped engines while $43.75%$ of cars have Straight shaped engines.
+
+### b. Split the Data into Training and Testing Data-sets
+
+I split the data into a training data-set with $70\%$ of the original data and a testing data-set with $30\%$ of the original data.
+
+```{r}
+# Split the data into training (70%) and test set (30%)
+set.seed(123)
+
+training.samples <- df.q1$vs %>%
+  createDataPartition(p = 0.7, list = FALSE)
+
+train.data <- df.q1[training.samples, ]
+test.data <- df.q1[-training.samples, ]
+```
+
+### c. Perform Discriminant Analysis on the training set
+
+#### 1. Bartlett's Test
+
+First I determined whether to perform a **Linear Discriminant Analysis (LDA)** or a **Quadratic Discriminant Analysis (QDA)**. This decision can be made using a **Bartlett's test.**
+
+> **Brief Definition**: Bartlett's test is a statistical test used to assess whether the variances of different groups or samples are equal. Specifically, it is employed to test the null hypothesis that the variances across multiple groups are homogeneous or homoscedastic.
+>
+> The formula for the Bartlett's test is:
+>
+> $$
+>  T = \frac{{(N-k)  \ln{s^{2}{p}} - \sum_{i=1}^{k}(N_{i} - 1) \ln{s^{2}{i}}}}{{1 + \frac{1}{{3(k-1)}} \left(\sum_{i=1}^{k}{\frac{1}{{N_{i} - 1}}}\right) - \frac{1}{{N-k}}}} 
+> $$
+>
+> Where:
+>
+> $T$ is the Bartlett test statistic.
+>
+> $N$ is the total number of observations.
+>
+> $k$ is the number of random samples (which may vary in size and are each drawn from independent normal distributions).
+>
+> $N_{i}$ is the size of the $i$-th sample.
+>
+> $s^{2}_{p}$ is the pooled estimate for the variance.
+>
+> $s^{2}_{i}$ is the variance of the $i$-th sample
+>
+> **The Null Hypothesis** when running the Bartlett's test is that **the variances of the different groups or samples in your data-set are equal**.
+>
+> Mathematically, this can be represented as:
+>
+> $$
+> H_0 : \sigma^2_1 = \sigma^2_2 = … = \sigma^2_k
+> $$
+>
+> If we **reject the Null Hypothesis**, we run a **Quadratic Discriminant Analysis** , which does not assume equal variance across variables.
+>
+> If we **fail to reject the Null Hypothesis**, we run a **Linear Discriminant Analysis** , which assumes equal variance across variables.
+
+In r, this can be implemented using the `bartlett.test()` function. I ran the bartlett's test on only the numeric variables of my data-frame of interest.
+
+```{r}
+#group numeric variables
+df.num = df.q1 %>%
+  dplyr::select_if(is.numeric)
+
+#run bartlett's test
+bartlett.test(df.num)
+```
+
+The **P_Value** for the Bartlett's test is $2.2e^{-16}$ which is $\le 0.05$, thus we can **reject the Null Hypothesis** and run a **Quadratic Discriminant Analysis**.
+
+#### 2. Quadratic Discriminant Analysis (QDA)
+
+I used the `qda()` function from the `MASS` library to achieve this.
+
+```{r}
+# Fit the model
+model <- qda(vs ~., data = train.data)
+```
+
+### d. Evaluate the model's performance on the testing set using appropriate metrics.
+
+To assess the model's performance, I focused on **Accuracy**, **Precision**, **Recall** and the **F1 score** of the model. I created a **Confusion matrix** using the `confusionMatrix()` function from the `caret` library to assess these metrics. The Confusion Matrix gives a summary of numerous metrics of model performance.
+
+```{r}
+# Make predictions
+predictions <- model %>% predict(test.data)
+
+# Model accuracy
+c.matrix <- confusionMatrix(predictions$class, test.data$vs)
+
+c.matrix
+```
+
+#### 1. Accuracy
+
+> **Accuracy** is a commonly used metric to evaluate the **overall correctness of a classification model**. It measures the proportion of correctly predicted instances among all instances. The accuracy is calculated using the formula:
+>
+> $$
+>  Accuracy = \frac{True Positives+True NEgatives}{Total Instances}
+> $$
+
+This is automatically computed in the confusion matrix, and I access the value as shown below:
+
+```{r}
+accuracy <- c.matrix$overall["Accuracy"]
+cat('Accuracy:', accuracy)
+```
+
+The accuracy of the model is $100 \%$, with a **95% Confidence Interval** of $[0.6637, 1]$. This implies that the model performs with perfect correctness across all classes.
+
+#### 2. Precision
+
+> **Precision** is a metric in the evaluation of binary classification models, and measures the accuracy of the positive predictions made by the model. It is calculated as:
+>
+> $$
+> Precision = \frac{True Positives}{True Positives + FalsePositives}
+> $$
+
+This is automatically computed in the confusion matrix and I access the value as shown below:
+
+```{r}
+precision <- c.matrix$byClass["Pos Pred Value"]
+
+cat('Precision:', precision)
+```
+
+The Precision of the model is $1$. This means that $100\%$ of the time, the model will correctly predict a positive result, which is a Straight Shaped Engine. This is very good performance, as it implies the model will make a false positive prediction $0\%$ of the time.
+
+#### 3. Recall
+
+> **Recall**, also known as sensitivity or true positive rate, is a metric used to evaluate the ability of a classification model to correctly identify positive instances among all actual positive instances. In the context of discriminant analysis or any binary classification model, recall is calculated as:
+>
+> $$
+> Recall = \frac{True Positives}{True Positives + FalseNegatives}
+> $$
+
+This is automatically calculated in the confusion matrix, and I access the value as shown:
+
+```{r}
+recall <- c.matrix$byClass["Sensitivity"]
+
+cat('Recall: ', recall)
+```
+
+The Recall of the model is $1$. This means that $100\%$ of the time, the model correctly predicts a negative result, which is V-Shaped Engine Shape. This is very good performance, as it implies that there will make a false negative prediction $0\%$ of the time.
+
+#### 4. F1-Score
+
+> The F1-score is a metric that combines both precision and recall into a single value. It is particularly useful when you want to balance the trade-off between precision and recall. The F1 score is calculated using the following formula:
+>
+> $$
+> F1 Score = \frac{2\times Precision \times Recall}{Precision + Recall}
+> $$
+
+I used the Precision and recall values computed previously to compute the F1 Score as shown:
+
+```{r}
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+cat('F1-Score: ', f1_score)
+```
+
+The F1-Score is $1$. This gives a balanced measure of the precision and recall values. This score is very good, as it implies perfect precision and recall by the model.
+
+#### e. Discuss the classification accuracy and the practical implications of the discriminant analysis
+
+The practical implications of the discriminant analysis model's outstanding performance on the `mtcars` data-set are promising, suggesting that the model is well-suited for the task of classifying engine shapes based on the provided features. Some practical Implications are:
+
+> -   **Reliable Classification**:
+>
+>     The perfect accuracy, precision, recall, and F1-Score indicate that the model is highly reliable in classifying engine shapes. This is particularly valuable in applications where accurate classification is crucial, such as in automotive design or manufacturing.
+>
+> -   **Minimal False Positives and Negatives**:
+>
+>     The precision and recall values being 1 signify that the model makes very few, if any, false positive and false negative predictions. This is important in scenarios where misclassification could have significant consequences, such as in automotive design and manufacture. This could aid in manufacture of less faulty cars and minimise manufacturing losses.
+>
+> -   **Model Trustworthiness**:
+>
+>     The high level of accuracy and performance metrics builds trust in the model's capabilities. Stakeholders, such as engineers, designers, or decision-makers relying on the model's predictions, can have confidence in its ability to accurately classify engine shapes.
+>
+> -   **Potential for Automation**:
+>
+>     Given the model's excellent performance, there may be opportunities to automate the engine shape classification process in real-world applications. This could lead to increased efficiency and reduced human effort in tasks related to engine shape identification.

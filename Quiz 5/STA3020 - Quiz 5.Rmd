@@ -1,0 +1,235 @@
+---
+title: "STA3020-Quiz 5"
+author: "Chesia Anyika"
+date: "2024-04-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+These are the necessary libraries for the task given:
+
+```{r}
+# Load required libraries
+library(cluster)
+library(dplyr)
+library(readr)
+library(naniar)
+```
+
+# Questions
+
+You are provided with the `"AMIBbrief_raw_daily1.csv"` dataset. Use it to work on the following task.
+
+## I. Task 1
+
+**Cluster analysis does NOT generally work with missing data.**
+
+**a) Delete incomplete cases.**
+
+**b) Remove observations with NA.**
+
+First I imported the given data-set and viewed it to get a preliminary idea of its characteristics.
+
+```{r}
+#import the dataset 
+data <- read_csv("C:/Users/Chesia/Downloads/AMIBbrief_raw_daily1.csv")
+
+#view the data
+View(data)
+head(data)
+```
+
+I then performed some more exploratory analysis to decipher more of the data's characteristics.
+
+```{r}
+ncol(data)
+nrow(data)
+sapply(data, class)
+```
+
+The data has 17 columns, of which one is non-numeric (`date` variable) and the rest are numeric variables. The data also has 1458 observations.
+
+I created a new dataset, `data.num` to omitt the `date` variable from my analysis, as it is a character variable and can not be used in the cluster analysis.
+
+```{r}
+#create dataset of only numeric observations
+data.num <- data %>% 
+  select_if(is.numeric)
+
+#view the results
+colnames(data.num)
+```
+
+The date variable has been successfully omitted.
+
+I then used the `is.na()` function to check for NA values in the new numeric data-set as follows:
+
+```{r}
+# Check for NA values in each variable
+na.check <- colSums(is.na(data.num))
+
+#View the results
+na.check
+```
+
+Of the 16 variables, 9 have NA values. I visualised the distribution of NA values in a **missing data heat map** to get a better understanding of the nature of missingness in the data, to inform which method of dealing with the missing values to use.
+
+```{r}
+#library(naniar)
+vis_miss(data.num)
+```
+
+I opted to use the `na.omit()` function taking in the following considerations:
+
+-   The missing values tend to be located in the same observations, indicating possible incomplete cases, which can be deleted row-wise.
+
+-   The consistent low percentage of missing values per variable, at $< 3\%$ for each variable suggests omitting the incomplete observations would not result in significant data loss.
+
+-   The effect of omitting such a low percentage of missing values, at 0.7%, from my analysis is negligible.
+
+This is implemented as follows:
+
+```{r}
+#omit observations with missing values row-wise
+data.clean <- na.omit(data.num)
+
+#visualise the percentage of missing values
+vis_miss(data.clean)
+```
+
+There are no more missing values in the data-set. percentage of rows lost to gauge the extent of data loss, as follows:
+
+```{r}
+#compute the initial and final number of rows
+l1 <- nrow(data.num)
+l2 <- nrow(data.clean)
+
+#compute percentage loss of rows
+loss <- ((l1 -l2)/l1)*100
+
+#view the result
+cat('\n Initial number of observations: ', l1, 
+    '\n Final number of observations: ', l2, 
+    '\n Percentage loss of observations: ', loss)
+```
+
+Due to deleting observations row-wise, we lost a larger percentage of data than the percentage of missing values which was 0.7. The final percentage data loss is $5.6\%$, which is still not a large percentage of data to lose to be significant. There remain 1376 rows for our analysis.
+
+Furthermore, I omitted the
+
+## II. Task 2
+
+**Different variables will be "weighted" differently in the distance calculation. To alleviate this, a common approach is to rescale each variable into a standardized, z-score variable.**
+
+**a) scale all the variables.**
+
+**b) check and fix the id variable (which does not want standardizing)**
+
+I used the `dplyr` package to omit the `id` variable from the cleaned data-set, scale the resultant data-set and finally add the unchanged `id` variable back to the data-set. This is implemented as follows:
+
+```{r}
+#scale the cleaned dataset, omitting id variable
+data.scale <- data.clean %>%
+  select(-id) %>%
+  scale() %>%
+  cbind(data.clean$id)  # Add id variable back
+
+#convert result into a dataframe
+data.scale <- as.data.frame(data.scale)
+
+#View the resultant dataset
+head(data.scale)
+```
+
+The `id` variable is converted to an index by the `as.data.frame()` function, and remains unscaled. The rest of the variables are appropriately scaled.
+
+## III. Task 3
+
+**Perform the hierarchical clustering using the complete linkage:**
+
+**a) extract the cluster assignments for the desired number (k) of clusters.**
+
+**b) group your observations into clusters using a maximum height (h).**
+
+I performed hierarchical clustering using the complete linkage using the `hclust()` function, then visualised it as follows:
+
+```{r}
+#perform hierarchical clustering with complete linkage
+hc.comp <- hclust(dist(data.scale), method = "complete")
+
+#visualise the dendrogram
+par(mar=c(3,1,1,5)) 
+plot(as.dendrogram(hc.comp),horiz=T)
+
+# Add a vertical line representing the maximum height
+max_height <- 50
+abline(v = max_height, col = "red", lty = 2)
+```
+
+The labels were too numerous to be visible, even when plotted horizontally instead of vertically.
+
+I added a red line to determine the appropriate maximum height to cut off the dendrogram, for part b of the question. a height of 50 allowed me to consider only the most prominent cluster.
+
+I then extracted the cluster assignments for 3 clusters, which seemed to be the most prominent clusters in my visualisation. I then visualised them
+
+```{r}
+#extract cluster assignments
+k.clusters <- cutree(hc.comp, k = 3)
+
+##Visualisation
+# Calculate average values of each variable for each cluster
+cluster.means <- aggregate(data.clean[, -1], by = list(cluster = k.clusters), FUN = mean)
+
+# Plot cluster profiles
+par(mfrow = c(1, 1))  # Set plotting layout
+matplot(t(cluster.means), type = "b", pch = 19, col = 1:3,
+        xlab = "Variables", ylab = "Average Value",
+        main = "Cluster Profiles")
+legend("topright", legend = unique(k.clusters), col = 1:3, pch = 19, title = "Cluster")
+
+
+
+```
+
+I then grouped my observations into cluster using maximum height as follows:
+
+```{r}
+#define maximum height
+max_height <- 50
+clusters_h <- cutree(hc_complete, h = max_height)
+
+# View the results
+clusters_h
+
+```
+
+The output `1 1 2 2 1 1 1 2 2 2 1 2` represents the cluster assignments for each observation in a dataset after applying hierarchical clustering. Each number corresponds to a cluster label, indicating which cluster each observation belongs to. In this case, the dataset has been divided into two clusters: observations labeled with "1" belong to Cluster 1, while those labeledwith "2" belong to Cluster 2. This clustering process groups similar observations together, providing insights into the underlying structure or patterns within the data.
+
+## IV. Task 4
+
+**Use the K-mean approach to determine the number of clusters for the data-set. Provide a discussion on your observations of the three clustering approaches.**
+
+I used the kmeans approach to determine the number of clusters, and visualised the result as follows:
+
+```{r}
+#K-means approach to determine number of clusters
+k_means <- kmeans(data.scale, centers = 3)
+
+# Get cluster centers from k-means
+initial_centroids <- k_means$centers
+
+# Perform hierarchical clustering with initial centroids from k-means
+hc_kmeans <- hclust(dist(initial_centroids), method = "complete")
+
+# Visualize hierarchical clustering dendrogram
+plot(hc_kmeans, main = "Hierarchical Clustering with K-means Initial Centroids")
+
+
+```
+
+The hierarchical clustering using the kmeans approach yielded a much simple and much more readable clustering graph.

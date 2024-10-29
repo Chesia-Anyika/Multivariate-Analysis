@@ -1,0 +1,519 @@
+---
+title: "STA3020 QUIZ 3"
+author: "Chesia Anyika"
+date: "2024-02-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question
+
+For this task, use the `german.credit` data set available in the `fairml` package. This discriminant analysis task aims to create a predictive model that assists in assessing the credit risk of consumers based on their financial attributes, providing valuable insights for decision-making in the lending process. Given the German Credit Data set, the task is to perform a discriminant analysis to develop a model that predicts credit risk (`Credit_risk`) based on various features in the dataset. Specifically, the objective is to assess the discriminative power of the available variables in distinguishing between "BAD" and "GOOD" credit risks.
+
+1\. Explore and understand the distribution of the target variable, "`Credit_risk.`"
+
+2\. Identify and select relevant predictor variables that may contribute to the discrimination between "BAD" and "GOOD" credit risks.
+
+3\. Split the dataset into training and testing sets to assess the model's performance on unseen data.
+
+4\. Apply linear discriminant analysis (LDA) or quadratic discriminant analysis (QDA) to build a model predicting "`Credit_risk`" based on the selected variables.
+
+5\. Evaluate the discriminant model's performance using appropriate metrics such as accuracy, precision, recall, and F1 score. Visualize the discriminant functions and decision boundaries to interpret how the model separates the two classes.
+
+6\. Analyze the importance of each variable in predicting credit risk by examining the discriminant loadings.
+
+7\. Validate the discriminant model using cross-validation techniques to ensure robustness.
+
+8\. Interpret the results and provide insights into which variables are significant in determining credit risk in the German market.
+
+# Libraries
+
+The following libraries were loaded to perform the tasks that follow
+
+```{r}
+#library containing the data
+library(fairml)
+
+#For general data manipulation
+library(tidyverse)
+
+#For feature selection using Information Gain
+library(FSelector)
+
+#For analysis of eta-squared (manova)
+library(effectsize)
+
+#For splititng of data and accuracy testing
+library(caret)
+
+#For running discriminant analysis
+library(MASS)
+```
+
+# 1. Exploratory Data Analysis
+
+I loaded the required data and viewed the full data-set.
+
+```{r}
+#load the data
+data('german.credit')
+
+#View the full dataset
+View(german.credit)
+```
+
+I then got the dimensions of the data using `nrow()` and `ncol()` functions, as well as descriptions of the variable names and their datatypes using the `class()` function
+
+```{r}
+#get the number of variables
+cat('The data-set has', ncol(german.credit), 'variables \n')
+
+#get the number of observations
+cat('The data-set has', nrow(german.credit), 'observations \n')
+```
+
+```{r}
+#get a summary of variable characteristics
+as.matrix(sapply(german.credit, class))
+```
+
+> **Interpretation**
+>
+> There are 21 variables, all of which are either **factor variables** or **numeric variables**.
+>
+> `Credit-risk` specifically is a factor variable
+
+## Question 1: Assessing `Credit-risk` Variable
+
+As credit risk is a factor variable, I used the `levels()` function to determine how many unique observations the variable has, and which ones.
+
+```{r}
+levels(german.credit$Credit_risk)
+```
+
+I then visualised the distribution of these levels using a bar graph, with the `Credit_risk` target variables on the x-axis, and their Percentage occurrence on the y axis.
+
+```{r}
+#assign total observations to a variable
+totalr <- nrow(german.credit)
+
+#create a dataframe of the counts per factor for Credit_risk
+counts <- as.data.frame(table(german.credit$Credit_risk))
+counts
+
+#Calculate Percentages
+pcounts <- data.frame(Counts = counts, Percentage = ((counts$Freq)*100)/totalr)
+pcounts
+
+#Create visualisation
+ggplot(pcounts, aes(x = Counts.Var1, y = Percentage, fill= Counts.Var1)) + 
+  geom_bar(stat = 'identity' ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme(legend.position="none") +
+  xlab('Credit Risk Ratings')
+```
+
+> **Interpretation**
+>
+> `Credit_risk` is a binary factor variable, with two outcomes: `BAD` and `GOOD`.
+>
+> The distribution of the variables is such that 30% of accounts have a `BAD` credit risk, whilst 70% have a `GOOD` credit risk. Thus majority of German Credit accounts have `GOOD` credit risk.
+
+## Question 2: Assessing Predictor Variables
+
+In order to assess the discriminative power of the available attributes in predicting `Credit_risk` , I used both **Information Gain test** and **MANOVA test** to identify the most relevant predictor variables.
+
+### Test 1: Information Gain - Factor Variables
+
+> **Information Gain** is the reduction in entropy (uncertainty) achieved by partitioning the data based on a particular feature. It can be used in quantifying the effectiveness of a feature in classifying or predicting the target variable.
+>
+> For feature selection, we calculate the information gain of each predictor variable, and consider the variables with the **highest information gain**. These features contribute the most to reducing uncertainty in predicting the target variable.
+>
+> The mathematical formula for Information gain is:
+>
+> $$ IG (S,A)= Entropy(S) - \sum_{v \in values(A)} \frac{|S_{v}|}{|S|} \times Entropy(S)$$
+>
+> Where:
+>
+> -   $S$ is the current set
+>
+> -   $A$ is the feature being considered
+>
+> -   $values(A)$ are possible values of feature $A$
+>
+> -   $S_{v}$ is the subset of $S$ where feature $A$ has value $v$
+>
+> -   $|S|$ represents the size of set $S$
+>
+> I chose to use Information Gain for feature selection of the factor variables.
+
+To compute this, I first isolated the factor variables into a new dataframe.
+
+```{r}
+#step 1: isolate the factor variables
+g.factors <- german.credit %>% select_if(is.factor)
+
+#check for success
+as.matrix(sapply(g.factors, class))
+```
+
+I then computed the information gain for each predictor variable using the `information.gain()` function form the `FSelector` library.
+
+```{r}
+#step 2: Compute information gain
+IG.result <- information.gain(Credit_risk ~ ., g.factors)
+
+#Step 3: sort the resulting dataframe
+IG.sorted <- arrange(IG.result, desc(attr_importance))
+
+#View the dataframe
+IG.sorted
+```
+
+I then created a scree plot of Information Gain against the attributes in descending order, to choose an appropriate cut-off point for important attributes.
+
+```{r}
+#plot the scree plot
+plot(IG.sorted$attr_importance, type = "b", pch = 19, col = "blue",
+     main = "Information Gain Scree Plot",
+     xlab = "Factor Variables", ylab = "Information Gain")
+```
+
+There is not any significant information gain after the 6th ordered factor variable, thus i filtered for the first 6 factor variables as follows:
+
+```{r}
+#top 6 factor variables based on information gain
+IG.top <- cutoff.k(IG.sorted, k = 6)
+
+#View the result
+IG.top
+```
+
+> **Interpretation**
+>
+> The variables chosen due to their significant information gain in relation to the target variable are:
+>
+> -   `Account_status`: a factor with four levels representing the amount of money in the account or `"no chcking account"`.
+> -   `Credit_history`: a factor with five levels representing possible credit history backgrounds.
+> -   `Savings_bonds`: a factor with five levels representing amount of money available in savings and bonds or `"unknown / no savings account"`.
+> -   `Purpose`: a factor with ten levels representing possible reasons for taking out a loan
+> -   `Property`: a factor with four levels describing the type of property to be bought or `"unknown / no property"`.
+> -   `Present_employment_since`: a factor with five levels representing the length of tenure in the current employment or `"unemployed"`.
+
+### Test 2. MANOVA test - Numeric Variables
+
+> **Multivariate Analysis of Variance (MANOVA)** is a statistical technique used to compare means across multiple dependent variables simultaneously.
+>
+> I chose to use MANOVA as although it is traditionally applied to analyze the differences in means of multiple groups for categorical dependent variables, it can be adapted for feature selection with numeric predictor variables in experimental designs where you have **multiple dependent variables (typically continuous)** and **one or more independent (categorical) variables** with multiple levels.
+>
+> **The formula for a MANOVA test is:**
+>
+> $$
+> Y = \beta + \epsilon
+> $$
+>
+> Where:
+>
+> $Y$ is the $n \times p$ matrix of observed dependent variables for $n$ observations and $p$ variables.
+>
+> $X$ is the $n \times k$ matrix of the independent variables for $k$ independent variables.
+>
+> $\beta$ is the $k\times p$ matrix of coefficients.
+>
+> $\epsilon$ is the $n\times p$ matrix of residuals .
+>
+> The **Null Hypothesis** when running a MANOVA test is that **there are no significant differences among the group means across all the dependent variables**. This is represented as:
+>
+> $$
+> H_{0}: \mu_1 = \mu_2=…=\mu_k
+> $$
+>
+> Where:
+>
+> $H_0$ is the null hypothesis.
+>
+> $\mu_1$, $\mu_2$,..., $\mu_k$ are vectors of population means for the different groups across all dependent variables.
+>
+> $k$ is the number of groups.
+
+First I filtered only the numeric variables for the manova test, and added the target variable to the dataframe
+
+```{r}
+#step 1: isolate the numeric variables
+g.num <- german.credit %>% select_if(is.numeric)
+
+#add the factor variable to the dataframe
+g.num$Credit_risk <- german.credit$Credit_risk
+
+#check for success
+as.matrix(sapply(g.num, class))
+```
+
+I then ran the MANOVA test with the numeric variables against the target variable, `Credit_risk` .
+
+```{r}
+#group the independent variables
+indep_vars <- cbind(g.num$Duration, g.num$Credit_amount, g.num$Installment_rate, g.num$Resident_since, g.num$Age, g.num$Existing_credits, g.num$People_maintenance_for)
+
+#run the manova test
+fit <- manova(indep_vars ~ Credit_risk, data = g.num)
+
+#get a summary of the test
+summary(fit)
+```
+
+The **Pillai's Trace test statistic** is statistically significant, with a P_value of $1.811 e^{-11}< 0.05$
+
+Thus there is **little evidence to support the null hypothesis that there are no significant differences among group means** across all the dependent variables.
+
+In the context of feature selection, this means there are **certain variables that contribute more to the variation of the Credit_risk variable than others**, which are the predictor variables we should select.
+
+I then ran an **Partial Eta-squared** ( $\eta^2_p$ )analysis of effect size, to see the extent at which the variance of the target variable is explained by the dependent variables in the MANOVA test.
+
+> **Brief Definition:** In the context of MANOVA, $\eta^2_p$ is an effect size measure that quantifies the proportion of total variance in the dependent variables that is attributable to the independent variable(s) being studied, while statistically controlling for other variables in the model. The proportion it ranges from **0 (no effect)** to **1 (compete effect)**. It can be interprated as follows:
+>
+> $0.01$**:** Small effect size
+>
+> $0.06$: Medium effect size
+>
+> $0.14$ **or higher:** Large effect size
+>
+> **Formula:**
+>
+> $$
+> \eta^2_p = \frac{SS_{Effect}}{SS_{Total}}
+> $$Where:
+>
+> $SS_{Effect}$ is the sum of squares for the effect of interest (grouping/independent variable).
+>
+> $SS_{Total}$ is the total sum of squares, representing the overall variability in the multivariate response.
+
+I used the `eta_squared()` function in the `effectsize` library to compute this.
+
+```{r}
+eta_squared(fit)
+```
+
+The $\eta^2_{p}$ value of $0.06$ indicates that the independent variables in the MANOVA test cumulatively have a medium effect on the target variable `Credit_risk` . This is an acceptable value for feature selection.
+
+I then used a **summary anova table** to obtain a summary of the individual anova tables per independent variable and the dependent variable. This is so I can determine which independent variables are more significantly associated with variability across the `Credit_risk` groups.
+
+```{r}
+#anova tables
+summary.aov(fit)
+```
+
+> The response variables with significant P_values \< $0.05$ are:
+>
+> -   Response 1, with a p_value of $6.488e^{-12}$ (`Duration` variable)
+>
+> -   Response 2, with a p_value of $8.798e^{-7}$ (`Credit_amount` variable)
+>
+> -   Response 3, with a p_value of $0.022$ (`Installment_rate` variable)
+>
+> -   Response 5, with a p_value of $0.0039$ (`Age` variable)
+>
+> Thus the Variables Chosen are:
+>
+> -   `Duration`: a continuous variable, the duration in months.
+>
+> -   `Credit_amount`: a continuous variable.
+>
+> -   `Installment_rate`: a continuous variable, the installment rate in percentage of disposable income
+>
+> -   `Age`: a continuous variable, the age in years.
+
+# 2. Discriminant Analysis
+
+> **Brief Definition :** Discriminant Analysis is a statistical method for categorizing observations into predefined groups by identifying a linear combination of predictor variables that maximizes differences between groups.
+
+## Question 3: Split the data into Training and Testing
+
+First I isolated the variables chosen in **Question 2** into a data-frame
+
+```{r}
+#select relevant columns
+df <- german.credit %>%
+  select(Credit_risk, Account_status, Credit_history, Savings_bonds, Purpose, Property, Present_employment_since, Duration, Credit_amount, Installment_rate, Age)
+
+#Check for success
+head(df)
+```
+
+I then split the data into training and testing data-sets.
+
+```{r}
+# Split the data into training (70%) and test set (30%)
+set.seed(123)
+
+training.samples <- df$Credit_risk %>%
+  createDataPartition(p = 0.7, list = FALSE)
+
+train.data <- df[training.samples, ]
+test.data <- df[-training.samples, ]
+```
+
+## Question 4: Apply LDA or QDA
+
+The choice on whether to run **Linear Discriminant Analysis** or **Quadratic Discriminant Analysis** can be made based on the **Bartett's test**.
+
+> **Brief Definition**: Bartlett's test is a statistical test used to assess whether the variances of different groups or samples are equal. Specifically, it is employed to test the null hypothesis that the variances across multiple groups are homogeneous or homoscedastic.
+>
+> The formula for the Bartlett's test is:
+>
+> $$ 
+>  T = \frac{{(N-k)  \ln{s^{2}{p}} - \sum_{i=1}^{k}(N_{i} - 1) \ln{s^{2}{i}}}}{{1 + \frac{1}{{3(k-1)}} \left(\sum_{i=1}^{k}{\frac{1}{{N_{i} - 1}}}\right) - \frac{1}{{N-k}}}} 
+> $$ Where:
+>
+> $T$ is the Bartlett test statistic.
+>
+> $N$ is the total number of observations.
+>
+> $k$ is the number of random samples (which may vary in size and are each drawn from independent normal distributions).
+>
+> $N_{i}$ is the size of the $i$-th sample.
+>
+> $s^{2}_{p}$ is the pooled estimate for the variance.
+>
+> $s^{2}_{i}$ is the variance of the $i$-th sample
+>
+> The **Null Hypothesis** when running the Bartlett's test is that **the variances of the different groups or samples in your data-set are equal**.
+>
+> Mathematically, this can be represented as:
+>
+> $$
+> H_0 : \sigma^2_1 = \sigma^2_2 = ... = \sigma^2_k
+> $$
+>
+> If we **reject the Null Hypothesis**, we run a **Quadratic Discriminant Analysis** , which does not assume equal variance across variables.
+>
+> If we **fail to reject the Null Hypothesis**, we run a **Linear Discriminant Analysis** , which assumes equal variance across variables.
+
+I ran the Bartlett's test on the numeric variable of the chosen predictor variables, as follows:
+
+```{r}
+#group numeric variables
+df.num = df %>%
+  select_if(is.numeric)
+
+#run bartlett's test
+bartlett.test(df.num)
+```
+
+The P_Value for the **Bartlett's test** is $2.2e^{-16}$ which is \< $0.05$, thus we can **reject the Null Hypothesis** and \*\*run a **Quadratic Discriminant Analysis**.
+
+I used the `qda()` function from the `MASS` library to achieve this.
+
+```{r}
+# Fit the model
+model <- qda(Credit_risk ~., data = train.data)
+```
+
+## Question 5a: Assess the model's Performance
+
+To assess the model's performance in terms of **Accuracy**, **Precision**, **Recall** and **F1 score**, I created a Confusion matrix using the `confusionMatrix()` function from the `caret` library. The Confusion Matrix gives a summary of numerous metrics of model performance.
+
+```{r}
+# Make predictions
+predictions <- model %>% predict(test.data)
+
+# Model accuracy
+c.matrix <- confusionMatrix(predictions$class, test.data$Credit_risk)
+
+c.matrix
+```
+
+### 1. Accuracy
+
+> **Accuracy** is a commonly used metric to evaluate **the overall correctness of a classification model**. It measures the proportion of correctly predicted instances among all instances. The accuracy is calculated using the formula:
+>
+> $$ Accuracy = \frac{True Positives+True NEgatives}{Total Instances}$$
+
+This is automatically computed in the confusion matrix, and I access the value as shown below:
+
+```{r}
+accuracy <- c.matrix$overall["Accuracy"]
+cat('Accuracy:', accuracy)
+```
+
+The accuracy of the model is $70.33 \%$, with a **95% Confidence Interval** of $[0.6481, 0.7545]$. This is an acceptable level of accuracy for the model. Thus, the model performs relatively well across all classes.
+
+### 2. Precision
+
+> **Precision** is a metric in the evaluation of binary classification models, and measures the **accuracy of the positive predictions made by the model**. It is calculated as:
+>
+> $$ Precision = \frac{True Positives}{True Positives + FalsePositives}$$
+
+This is automatically computed in the confusion matrix and I access the value as shown below:
+
+```{r}
+precision <- c.matrix$byClass["Pos Pred Value"]
+
+cat('Precision:', precision)
+```
+
+The Precision of the model is $0.5049$. This means that 50% of the time, the model will correctly predict a positive result, which is a 'BAD' Credit_risk. This is not acceptable given the high cost of predicting a false positive, with potentially good debtors being denied loans.
+
+### 3. Recall
+
+> **Recall**, also known as sensitivity or true positive rate, is a metric used to evaluate the **ability of a classification model to correctly identify positive instances among all actual positive instances**. In the context of discriminant analysis or any binary classification model, recall is calculated as:
+>
+> $$
+> Recall = \frac{True Positives}{True Positives + FalseNegatives}
+> $$
+
+This is automatically calculated in the confusion matrix, and I access the value as shown:
+
+```{r}
+recall <- c.matrix$byClass["Sensitivity"]
+
+cat('Recall: ', recall)
+```
+
+The Recall of the model is $0.5778$. This means that $57\%$ of the time, the model correctly predicts a negative result, which is 'GOOD' Credit_risk. This is not acceptable given the high cost of false negatives, with banks possibly granting bad debtors loans and facing negative consequences such as increased losses due to loan defaults.
+
+### 4. F1-Score
+
+> The **F1-score** is a metric that combines both precision and recall into a single value. It is particularly useful when you want to **balance the trade-off between precision and recall**. The F1 score is calculated using the following formula:
+>
+> $$
+> F1 Score = \frac{2\times Precision \times Recall}{Precision + Recall}
+> $$
+
+I used the Precision and recall values computed previously to compute the F1 Score as shown:
+
+```{r}
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+cat('F1-Score: ', f1_score)
+```
+
+The F1-Score is $0.5389$. This gives a balanced measure of the precision and recall values. This score is not acceptable, given the high cost of false negatives and positives as described above.
+
+## Question 5b: Visualise the Discriminant Functions and Decision Boundaries
+
+There is no straightforward way to visualise the discriminant function for the quadratic discriminant analysis, due to the lack of an x element in the predictions, as would be present in a Linear Discriminant analysis. This is shown as follows:
+
+```{r}
+names(predictions)
+```
+
+The x element which is usually the linear coefficients of the discriminant loadings would be used to create the plot. Without it, for a model with a large number of predictor variables I found no suitable method of visualisation.
+
+## Question 6: Analyze the importance of each variable in predicting credit risk by examining the discriminant loadings.
+
+There are no inherent loadings in the discriminant analysis model, as shown below
+
+```{r}
+loadings <- model$loadings
+loadings
+```
+
+Without the x component, I found no suitable method to obtain the discriminant loadings for a Quadratic discriminant analysis.
+
+## Question 7: Validate the discriminant model using cross-validation techniques to ensure robustness.
+
+## Question 8: Interpret the results and provide insights into which variables are significant in determining credit risk in the German market.

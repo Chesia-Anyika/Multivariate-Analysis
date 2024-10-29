@@ -1,0 +1,256 @@
+---
+title: "STA3020 - QUIZ 1"
+output: html_document
+date: "2024-01-30"
+---
+
+> Name: Chesia Anyika
+>
+> ID: 665567
+
+# Question
+
+Air pollution is currently one of the most serious public health worries worldwide. Many epidemiological studies have proved the influence that some chemical compounds can have on our health. Associations set up to monitor air quality are active all over the world to measure the concentration of these pollutants. They also keep a record of meteorological conditions such as temperature (T9, T12, T15), cloud cover (C9, C12, C15), wind (W9, W12, W15). The data-set is within the `fdm2id` package.
+
+The final aim is to analyse the relationship between the maximum daily ozone level and meteorological conditions. You have at our disposal 112 observations collected. You need to inspect the data with a PCA and illustrate the reconstruction property of PCA. The variables available are max O3 (maximum daily ozone), Temperature at 0900HRS, 1200HRS & 1500HRS (T9, T12, T15), cloud cover at 0900HRS, 1200HRS & 1500HRS (C9, C12, C15), and wind speed at 0900HRS, 1200HRS & 1500HRS (W9, W12, W15):
+
+− Perform the PCA on the ozone data and give a short interpretation of the dimensions of variability (interpretation of the observations plot, correlation between variables, percentage of variability, etc.)
+
+# Execution
+
+## Libraries
+
+```{r}
+# library that contains the ozone dataset
+library(fdm2id) 
+
+# library for visualisation of correlation matrices
+library(ggcorrplot) 
+
+# library with PCA module
+library(FactoMineR)
+
+# library for visualisation of PCA outputs
+library(factoextra)
+```
+
+## Exploratory Data Analysis
+
+I loaded the required data and explored the data-set's characteristics, such as its column names and dimensions.
+
+```{r}
+#load ozone data
+data("ozone")
+
+#view the first 5 entries of the dataset
+head(ozone)
+```
+
+I used the `summary()` function to get a detailed description of the datatypes and variables within the data-set, as well as the column names of the 10 variables, as shown below.
+
+```{r}
+#check the data type of the data 
+summary(ozone)
+```
+
+All the variables are numeric, which is good as PCA can only be performed on numeric variables. The data is organised such that the variables are arranged column-wise, and the observations are arranged row-wise.
+
+We can get the dimensions of the data using the `dim()` function that shows we have 10 rows which represent our variables, and 112 columns which represent our observations.
+
+```{r}
+#get the dimensions of the dataset
+dim(ozone)
+```
+
+Finally we can use the `is.na()` function to check for null values, before we begin with the Principal Component Analysis.
+
+```{r}
+# check for null values
+colSums(is.na(ozone))
+```
+
+The code above shows there are no null values in this data-set that need to be dealt with.
+
+## Principal Component Analysis (PCA)
+
+### Step 1: Standardisation of data
+
+The next step is to standardise the data, in order to give equal weight to all the variables. This is because the variables of **Temperature, Cloud cover and Wind Speed** are all measured using different units. Scaling ensures the variables with different scales do not disproportionately influence the results of the PCA.
+
+Standardisation is usually performed by subtracting the mean from an observation then dividing the result by the standard deviation. This is repeated for all observations, as per the formula:
+
+$$
+Z_{ij} = \frac{X_{ij} - \bar{x_{ij}}}{s_{j}}
+$$
+
+Where:
+
+-   $Z_{ij}$ represents the standardised observation for variable j in sample unit i
+
+-   $X_{ij}$ represents the data for variable j in sample unit i
+
+-   $\bar{x_{j}}$ represents the mean
+
+-   $s_{j}$ represents the standard deviation for variable j
+
+In r, I used the `scale()` function to implement this, as shown below.
+
+```{r}
+#standardise the data
+ozone_std <- scale(ozone)
+
+#Get a summary of the data
+summary(ozone_std)
+```
+
+The summary of the data shows that the values are now standardised.
+
+### Step 2: Applying PCA
+
+#### Method : Using the Correlation Matrix.
+
+**Step 1: Compute the Correlation Matrix**
+
+I computed the Pearson's Coefficient for the data, as i am going to use the subsequent correlation matrix to apply PCA. Pearson's correlation coefficient is usually computed as per the formula:
+
+$$
+r=cov(X,Y)√var(X)√var(Y)
+$$
+
+Where
+
+-   $r$ represents the Pearson's Correlation Coefficient
+
+-   $cov(X,Y)$ represents the covariance between variables X and Y
+
+-   $\sqrt(var(X))$ represents the square root of the variance of variable X
+
+-   $\sqrt(var(Y))$ represents the square root of the variance of variable Y
+
+To implement this in r, I used the `cor()` function, then visualised the resultant correlation matrix in a correlation heat-map using the `ggcorrplot()` function.
+
+```{r}
+#Compute the Pearson's coefficient
+matc <- cor(ozone)
+corMatrix <- cor(ozone_std)
+
+# correlation heat map
+ggcorrplot(corMatrix, 
+           hc.order = TRUE, 
+           type = "lower", 
+           ggtheme = theme_minimal(),
+           lab = TRUE, 
+           lab_size = 3,
+           method = "circle", 
+           outline.color = "white", 
+           colors = c("red", "white", "blue"))
+```
+
+**Interpretation - Correlation heat-map**
+
+I can also use the correlation plot to examine which variables `maxO3` is highly correlated with, and in what direction.
+
+The above correlation plot shows that `maxo3` is highly correlated with `T12`, `T15`, `T9` and `W9` in descending order, in the positive direction.
+
+The correlation plot also shows that `maxO3` is highly correlated with `C12` and `C9` variables in the negative direction.
+
+**Step 2: Apply PCA**
+
+I then applied PCA using the `princomp()` function, and obtained a summary of the results.
+
+```{r}
+#apply pca
+pca2 <- princomp(matc)
+data.pca <- princomp(corMatrix, scale = FALSE)
+
+#get a summary of the data
+summary(data.pca)
+```
+
+The above analysis shows the 10 principal components computes, as well as their Standard deviation, Proportion of variance and Cumulative Proportion, which I will interprate in the next section.
+
+### Step 3: Data Analysis
+
+#### **1. Interpretation of PCA Summary**
+
+Looking at the Proportion of Variance row in the above analysis, we see that the first principal component, `Comp.1` , represents a perventage of 88.79% of the variance, and the second, `Comp.2` , represents a percentage of 9.7% of the variance. The following principal components represent less than 2% of the variance cumulatively, and can thus be regarded as non-significant.
+
+Examining the Cumulative Proportion row of the above analysis, we see that `Comp.1` and `Comp.2` represent 98.5% of the proportion of variance cumulatively, which is an acceptably large percentage to justify disregarding the other principal components.
+
+#### **2. Scree Plot**
+
+I visualised the Percentage Proportions represented by each Principal Component in the following scree plot, for further analysis of which Principal components are most representative of the variance of the data.
+
+```{r}
+#create scree plot - barplot with line
+fviz_eig(pca2, 
+         addlabels = TRUE,
+         main = "Scree Plot for PCA of Ozone Data", 
+         xlab = "Principal Components",              
+         ylab = "Percentage of Explained Variance",                              
+         barfill = "blue",
+         linecolor = 'black'
+)
+
+```
+
+There are two visible elbows in the line plot in the above graph at the 1st and 2nd Principal components, then the line is relatively straight for the remaining PCs. This shows that the differences in percentage of explained variance is negligible from `Comp.3` to `Comp.10` .
+
+#### 3. Bi-plot
+
+I visualised the contribution of each variable to the first two principle components using a biplot, to further analyse the contribution of each variable to the principle components.
+
+```{r}
+# Graph of the variables
+fviz_pca_var(data.pca, col.var = "contrib", gradient.cols = c("green","yellow","orange","red"))
+
+```
+
+In the above bi-plot, the first principle component (`Comp.1`) is represented as the x-axis and the second principle component (`Comp.2`) is represented as the y-axis.
+
+-   The `W9`,, `W12` and `W15` variables contribute significantly to the vertical axis which is `Comp.2` , in the negative direction. This is contrasted by `T9`, which contributed significnatly to the vertical axis in the positive direction.
+
+-   Furthermore, `C12` , `C12` , `C15` contribute significantly to the horizontal axis which is `Comp.1` ,in the negative direction. This is contrasted by `T12` , `T15` and `maxO3` which contribute significantly to the horizontal axis in the positive direction.
+
+-   Specifically in relation to `maxO3` , we can infer that the variable is located close to the `T12` , and `T15` variables, suggesting a strong positive correlation between them. Thus, the higher the temperatures recorded in the afternoon the higher the maximum ozone levels recorded for that day.
+
+-   `maxO3` is almost in the directly opposite quadrant to the `C9` and `C12` variables, which are also located far away from the variable in the horizontal direction. This suggests an inverse relationship between cloud cover and maximum ozone levels recorded in a day. Thus, the higher the cloud cover, the lower the maximum level of ozone recorded in a day.
+
+-   `maxO3` and the `W9` , `W12` and `W15` variables are situated on opposite quadrants in the vertical direction. As `maxO3` does not significantly contribute to the vertical axis, this implies a weak correlation between wind speed and the maximum level of ozone recorded in a day.
+
+#### 4. Examination of PC Loadings
+
+I obtained the PC loadings automatically calculated using the `princomp()` function, in order to examine the correlation between the original variables and the principal components. I specifically loaded only the first and second principal components which explain a high amount of the variance observed in the graph.
+
+```{r}
+# get the pca loadings
+data.pca$loadings [, 1:2]
+```
+
+**First Principal Component - Interpretation**
+
+Taking a significance level of $\rho \geq 0.34$, we can interpret that:
+
+The variables with the highest correlation with the first principal component are `maxO3` , `T15` and `T12` in the positive direction, and `C12` and `C9` in the negative direction.
+
+With specific respect to the `maxO3` variable, This implies that the maximum daily ozone levels are positively correlated with `T15` and `T12` , thus the higher temperatures in the afternoon and onwards are associated with higher maximum levels of ozone recorded for the day.
+
+Furthermore, `maxO3` is negatively correlated with `C12` and `C9` , implying that lower levels of cloud cover at and before noon hours are associated with higher maximum levels of ozone recorded for the day.
+
+**Second Principal Component - Interpretation**
+
+Taking the same significance level of $\rho \geq 0.34$, we can interpret that:
+
+The variables with the highest correlation with the second principal component are `T9` in the positive direction, and `W15` , `W12` and `W9` in the negative direction.
+
+With specific relation to the `maxO3` variable, which is not significantly correlated with `Comp.2` , we can interprate that `T9` , `W15` , `W12` and `W9` are not significantly correlated with changes in the `maxO3` variable. Thus morning temperatures and wind speed at all hours are not significantly associated with changes in maximum daily ozone levels recorded.
+
+## Conclusion
+
+The relationship between the **Maximum Daily Ozone Recorded** and the meteorological conditions **Temperature**, **Cloud Cover** and **Wind Speed** measured over time can be summarised as follows :
+
+-   **Maximum Daily Ozone** and **Temperature** are **directly related**. An increase in temperature is associated with an increase in Maximum Daily Ozone recorded, and afternoon temperatures hold more weight in this relationship.
+
+-   **Maximum Daily Ozone** and **Cloud Cover** are **inversely related**. An increase in cloud cover is associated with a decrease in Maximum Daily Ozone recorded, and measurements before noon hold more weight in this relationship.
+
+-   **Maximum Daily Ozone** and **Wind Speed** are **not significantly related**. An increase or decrease in wind speed does not have a significant effect on Maximum Daily Ozone Recorded.

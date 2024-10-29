@@ -1,0 +1,404 @@
+---
+title: "STA3020 - Quiz 2"
+output: html_document
+date: "2024-02-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Name: Chesia Anyika
+
+ID: 665567
+
+# Library
+
+```{r}
+#library for reading the data from the csv file to this notebook
+library(readr)
+
+#For data manipulation
+library(tidyverse)
+
+#library for analysis of effect size 
+library(effectsize)
+
+#Visualising boxplots of different variables
+library(gridExtra)
+```
+
+# Question
+
+Twenty-six samples of Romano-British pottery were found at four different kiln sites in Wales, Gwent and the New Forest. The sites are **Llanederyn (L)**, **Caldicot (C)**, **Island Thorns (I)**, and **Ashley Rails (A)**. The other variables are the **percentage of oxides of various metals** measured by atomic absorption spectrophotometry. The data were collected to see if **different sites contained pottery of different chemical compositions**. Each pottery sample was returned to the laboratory for chemical assay. In these assays the concentrations of five different chemicals were determined:
+
+Variable Names:
+
+1\. Al: Percentage of aluminum oxide in sample
+
+2\. Fe: Percentage of iron oxide in sample
+
+3\. Mg: Percentage of magnesium oxide in sample
+
+4\. Ca: Percentage of calcium oxide in sample
+
+5\. Na: Percentage of sodium oxide in sample
+
+6\. Site: Site where pottery sample was collected
+
+Use MANOVA to determine whether the **chemical content of the pottery** depends on the **site where the pottery was obtained**.
+
+1\. Which chemical elements vary significantly across sites?
+
+2\. How do the sites differ?
+
+a)  Is the mean chemical constituency of pottery from Ashley Rails and Isle Thorns different from that of Llanedyrn and Caldicot?
+
+b)  Is the mean chemical constituency of pottery from Ashley Rails equal to that of Isle Thorns?
+
+c)  Is the mean chemical constituency of pottery from Llanedyrn equal to that of Caldicot?
+
+# Execution
+
+## Step 1: Load the data into R
+
+First i imported the pottery data into r using the `read_csv()` function from the `readr` library, as my data is in `.csv` format.
+
+```{r}
+pdata <- read_csv("C:/Users/Chesia/Downloads/MANOVA Task_pottery(1).csv")
+head(pdata)
+```
+
+## Step 3: Exploratory Data Analysis
+
+I explored the characteristics of the data-set to have a better understanding of the data.
+
+-   First, I checked the variables data-types by applying the `class()` function to the `pdata` dataframe.
+
+-   Second, I checked the overall characteristics of the data using the `summary()` function.
+
+```{r}
+sapply(pdata, class)
+summary(pdata)
+```
+
+The data has **6 variables** and **26 observations**. The **Al, Fe, Mg, Ca** and **Na** variables indicate the measurement of the respective oxides found within the sampled pottery, and the **Site** variable indicates the site at which the samples were taken.
+
+I transformed the data into a new data-frame that:
+
+-   Groups the variables by the **Site** of the samples - using the `group_by()` function.
+
+-   Gives the **Counts** of the number of samples per **Site** - using the `n()` function.
+
+The code for that is as follows
+
+```{r}
+# summary statistics for dependent variables (metal oxides) 
+counts_df <- pdata %>% group_by(Site) %>%  summarise(n = n())
+
+counts_df
+```
+
+The data-frame shows that we have **unequal sample sizes** of pottery per site, with the summary being:
+
+-   Ashley Rails (A) - 5 Samples
+
+-   Caldicot (C) - 2 Samples
+
+-   Island Thorns (I) - 5 Samples
+
+-   Llanederyn (L) - 14 Samples
+
+## Step 3: Perform MANOVA
+
+### 1. Brief Definition of MANOVA
+
+**Multivariate Analysis of Variance (MANOVA)** is a statistical test that assesses whether there are statistically significant differences in the mean vectors of multiple dependent variables across different levels of one or more categorical independent variables.
+
+The formula for a MANOVA test is:
+
+> $$
+> Y = \beta + \epsilon
+> $$
+>
+> Where:
+>
+> -   $Y$ is the $n \times p$ matrix of observed dependent variables for $n$ observations and $p$ variables.
+>
+> -   $X$ is the $n \times k$ matrix of the independent variables for $k$ independent variables.
+>
+> -   $\beta$ is the $k\times p$ matrix of coefficients.
+>
+> -   $\epsilon$ is the $n\times p$ matrix of residuals .
+
+The **Null Hypothesis** when running a MANOVA test is that **there are no significant differences among the group means across all the dependent variables**. This is represented as:
+
+$$
+H_{0}: \mu_1 = \mu_2=...=\mu_k
+$$
+
+> Where:
+>
+> -   $H_0$ is the **null hypothesis**.
+>
+> -   $\mu_1$, $\mu_2$,..., $\mu_k$ are vectors of population means for the different groups across all dependent variables.
+>
+> -   $k$ is the number of groups.
+
+### 2. Execution of MANOVA
+
+I ran a MANOVA test with `Site` as my **independent variable** and `Al` , `Fe` , `Mg` , `Ca` and `Na` as my **dependent variables.** I grouped my dependent variables using the `cbind()` function, then ran the manova test using the `manova()` function which is one of `base` R functions. I then got a summary of the test using the `summary()` function.
+
+```{r}
+#group the dependent variables
+dep_vars <- cbind(pdata$Al, pdata$Fe, pdata$Mg, pdata$Ca, pdata$Na)
+
+#run the manova test
+fit <- manova(dep_vars ~ Site, data = pdata)
+
+#get a summary of the test
+summary(fit)
+```
+
+The **Pillai's Trace test statistic** is **statistically significant**, with a **p_value \< 0.05**.
+
+Thus there is **little evidence to support the null hypothesis that there are no significant differences among group means across all the dependent variables.**
+
+A statistically significant difference among group means suggests that the site at which the pottery samples are procured (independent variable) has a statistically significant association with the variation in the concentration of different metal oxides (dependent variables) in the samples.
+
+### 3. Analysis of Effect Size
+
+I am using the concept of **Partial Eta-Squared** ( $\eta^2_p$ ) to analyse how great of an effect the **Site** variable has on the variance across the sample metal oxide concentrations.
+
+> **Brief Definition**: In the context of MANOVA, $\eta^2_p$ is an effect size measure that quantifies the proportion of total variance in the dependent variables that is attributable to the independent variable(s) being studied, while statistically controlling for other variables in the model. The proportion it ranges from 0 (no effect) and 1 (compete effect).
+>
+> **Formula**:
+>
+> $$
+> \eta^2_p = \frac{SS_{Effect}}{SS_{Total}}
+> $$
+>
+> Where:
+>
+> -   $SS_{Effect}$ is the sum of squares for the effect of interest (grouping/independent variable).
+>
+> -   $SS_{Total}$ is the total sum of squares, representing the overall variability in the multivariate response.
+
+I used the `eta_squared()` function from the `effectsize` library as follows:
+
+```{r}
+#analysis of effect size
+eta_squared(fit)
+```
+
+The $\eta^2_{p}$ value is 0.52. This suggests that 52% of the total variability in the dependent variables is accounted by the Site factor. This is a statistically significant portion size.
+
+The confidence interval of $[0.28, 1.00]$ states the range of plausible values for the true population parameter of $\eta^2_{p}$ lies within that range of proportions.
+
+### 4. Analysis Per Dependent Variable
+
+I used a **summary anova table** to obtain a summary of the individual anova tables associated with the independent variable and each dependent variable. This is so I can determine which dependent variables vary significantly across the sites.
+
+```{r}
+#anova tables
+summary.aov(fit)
+
+```
+
+In the output above, the responses correspond to the following variables:
+
+| Response 1 - | Response 2 | Response 3 | Response 4 | Response 5 |
+|--------------|------------|------------|------------|------------|
+| Al           | Fe         | Mg         | Ca         | Na         |
+
+[**Answer to Question 1:**]{.underline} Each of the variables has a **p-value \<** $0.05$, the significance level, thus for each table we can **reject the null hypothesis** that there are no significant differences among the group means. This suggests that each metal oxide varies across sites in a statistically significant way.
+
+As the sample sizes of pottery collected differ per site, the p-values of each anova table are not monotonically related to the F values, and thus can not be compared to determine the extent to which the dependent variables vary across the sites.
+
+However, given that the manova test has confirmed the dependent variables vary across groups, we can meaningfully compare the dependent variables means across groups.
+
+## Step 4: Further Data Analysis
+
+### Question 2: How do the Sites differ?
+
+I further transformed my data into another new data-frame that:
+
+-   Gives the **Total** **Counts** of the number of samples - using the `n()` function.
+
+-   Gives the **Means** of the measured content of each **metal oxide** in the samples - using the `mean()` function.
+
+The code for this is as follows:
+
+```{r}
+# Ungrouped summary statistics for dependent variables (metal oxides) 
+summary_df <- pdata %>%  summarise(n = n(), mean_Al = mean(Al), mean_Fe = mean(Fe), mean_Mg = mean(Mg), mean_Ca = mean(Ca), mean_Na = mean(Na))
+
+summary_df
+```
+
+The above data-frame shows that the overall mean concentrations of the metal oxides in descending order are as follows:
+
+-   **Aluminium Oxide (Al)** - $14.49$
+
+-   **Iron Oxide (Fe)** - $4.476$
+
+-   **Magnesium Oxide (Mg)** - $3.142$
+
+-   **Sodium Oxide (Na)** - $0.1585$
+
+-   **Calcium Oxide (Ca)** - $0.1465$
+
+I then created a similar dataframe that grouped the metal oxide means per site:
+
+```{r}
+# Grouped summary statistics for dependent variables (metal oxides) 
+summary_df2 <- pdata %>% group_by(Site) %>%  summarise(n = n(), mean_Al = mean(Al), mean_Fe = mean(Fe), mean_Mg = mean(Mg), mean_Ca = mean(Ca), mean_Na = mean(Na))
+
+summary_df2
+```
+
+With this data-frame, I visualised the means of each metal oxide per site, for a better understanding of the distribution of chemical concentration. I did this by creating multiple barplots with Mean Composition of Metal Oxides on the y axis, and the various sites on the X axis.
+
+I used the `geom_bar()` function from the `ggplot2` library to create the plots, and the `grid.arrange()` function from the `gridExtra` library to arrange the plots side by side, as follows:
+
+```{r}
+p1 <- ggplot(summary_df2, aes(x = Site, y = mean_Al, fill = Site)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Aluminium Per Site",
+       x = "Site",
+       y = "Mean Composition") +
+  scale_fill_brewer(palette = "Set3") +
+  theme(legend.position="top")
+
+p2 <- ggplot(summary_df2, aes(x = Site, y = mean_Fe, fill = Site)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Iron Per Site",
+       x = "Site",
+       y = "Mean Composition") +
+  scale_fill_brewer(palette = "Set3") +
+  theme(legend.position="top")
+
+grid.arrange(p1, p2, ncol=2, nrow = 1)
+```
+
+```{r}
+p3 <- ggplot(summary_df2, aes(x = Site, y = mean_Mg, fill = Site)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Magnesium Per Site",
+       x = "Site",
+       y = "Mean Composition") +
+  scale_fill_brewer(palette = "Set3") +
+  theme(legend.position="top")
+
+p4 <- ggplot(summary_df2, aes(x = Site, y = mean_Ca, fill = Site)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Calcium Per Site",
+       x = "Site",
+       y = "Mean Composition") +
+  scale_fill_brewer(palette = "Set3") +
+  theme(legend.position="top")
+
+grid.arrange(p3, p4, ncol=2, nrow = 1)
+```
+
+```{r}
+p5 <- ggplot(summary_df2, aes(x = Site, y = mean_Na, fill = Site)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Sodium Per Site",
+       x = "Site",
+       y = "Mean Composition") +
+  scale_fill_brewer(palette = "Set3") +
+  theme(legend.position="top")
+
+grid.arrange(p5, ncol=1, nrow = 1)
+```
+
+From the above barplots I gathered that as compared to the other sites:
+
+-   Llanederyn has the **maximum mean concentration** of I**ron Oxide, Magnesium Oxide and Sodium Oxide** in their samples.
+
+-   Island Thorns has the **maximum mean concentration** of **Aluminium Oxide**, as well as the **minimum mean concentration** of **Calcium Oxide** in their samples.
+
+-   Caldicot has the **maximum mean concentration** of **Calcium Oxide** as well as the **minimum mean concentration** of **Aluminium Oxide** in their samples.
+
+-   Ashley Rails has the **minimum mean** concentration of **Iron, Magnesium and Sodium Oxides** in their samples.
+
+### Question 2a: Is the mean chemical constituency of pottery from Ashley Rails and Isle Thorns different from that of Llanedyrn and Caldicot?
+
+To evaluate this, I created a new dataframe in which all Ashley Rails and Isle Thorns values were given the site name **A&I**, and all Llanedyrn and Caldicot values were given the name **L&C**. I did this with the `mutate()` function from the `dplyr()` library.
+
+```{r}
+summary_df1 <- pdata %>%
+  mutate(Site = case_when(Site %in% c("A", "I") ~ "A&I",
+                           Site %in% c("L", "C") ~ "L&C",
+                           TRUE ~ as.character(Site)))
+summary_df1
+```
+
+Then I ran a manova test on the new dataframe, to evaluate whether the means of the metal oxides across the two groups can be considered equal or differ significantly.
+
+```{r}
+#group the dependent variables
+dep_vars1 <- cbind(summary_df1$Al, summary_df1$Fe, summary_df1$Mg, summary_df1$Ca, summary_df1$Na)
+
+#run the manova test
+fit1 <- manova(dep_vars1 ~ Site, data = summary_df1)
+
+#get a summary of the test
+summary(fit1)
+```
+
+The **Pillai's trace test statistic** is **statistically significant** as the \*\*p-value of $1.302 e^{-14}$ is \< 0.05. There is **not enough evidence to support the null hypothesis that there are no significant differences among group means across all the dependent variables**. Thus we can conclude that the mean chemical constituency of pottery from Ashley Rails and Isle Thorns differ from that of Llanedyrn and Caldicot.
+
+### Question 2b: Is the mean chemical constituency of pottery from Ashley Rails equal to that of Isle Thorns?
+
+To evaluate this, first I filtered the original data frame to include only the Ashley Rails and Isle Thorns groups.
+
+```{r}
+group_AI <- pdata %>%
+  filter(Site %in% c("A", "I"))
+
+group_AI
+
+```
+
+Then I ran a manova test on the new dataframe, to evaluate whether the means of the metal oxides across the two groups can be considered equal.
+
+```{r}
+#group the dependent variables
+dep_vars2 <- cbind(group_AI$Al, group_AI$Fe, group_AI$Mg, group_AI$Ca, group_AI$Na)
+
+#run the manova test
+fit2 <- manova(dep_vars2 ~ Site, data = group_AI)
+
+#get a summary of the test
+summary(fit2)
+```
+
+The **Pillai's trace test statistic** is **not statistically significant** as the **p-value of 0.068 is \> 0.05**. Thus we **fail to reject the null hypothesis** that the **there are no significant differences among group means across all the dependent variables**. Thus we can conclude that the mean chemical constituency of pottery from Ashley Rails is equal to that of Isle Thorns.
+
+### Question 2c: Is the mean chemical constituency of pottery from Llanedyrn equal to that of Caldicot?
+
+To evaluate this, first I filtered the original data frame to include only the Llanedyrn and Caldicot groups.
+
+```{r}
+group_LC <- pdata %>%
+  filter(Site %in% c("L", "C"))
+
+group_LC
+```
+
+Then I ran a manova test on the new dataframe, to evaluate whether the means of the metal oxides across the two groups can be considered equal.
+
+```{r}
+#group the dependent variables
+dep_vars3 <- cbind(group_LC$Al, group_LC$Fe, group_LC$Mg, group_LC$Ca, group_LC$Na)
+
+#run the manova test
+fit3 <- manova(dep_vars3 ~ Site, data = group_LC)
+
+#get a summary of the test
+summary(fit3)
+```
+
+The **Pillai's trace test statistic** is statistically significant as the \*\*p-value of $0.04262$ is \< 0.05\*\*. There is **not enough evidence to support the null hypothesis that there are no significant differences among group means across all the dependent variables**. Thus we can conclude that the mean chemical constituency of pottery from Llanedyrn and Caldicot differ in a statistically significant way.
